@@ -1,0 +1,212 @@
+-- ^^^^^^^^^^^^^^^
+-- Total Customers
+-- ^^^^^^^^^^^^^^^
+
+Select COUNT(customer_id) AS Total_Customers 
+From subscriptions;
+
+-- ^^^^^^^^^^^^^^^^^^^^^^
+-- Active Customers Check
+-- ^^^^^^^^^^^^^^^^^^^^^^
+
+Select SUM(Case When churned = 'No' THEN 1 ELSE 0 END) as Active_customers
+From subscriptions;
+
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^
+-- Overall Churned Customers
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+Select SUM(Case When churned = 'Yes' THEN 1 ELSE 0 END) as Churned_Customers
+From subscriptions;
+
+
+-- ^^^^^^^^^^^^^^^^^^^
+-- Overall Churn Rate 
+-- ^^^^^^^^^^^^^^^^^^^
+
+
+WITH Churn_Rate AS
+(
+    SELECT
+        COUNT(customer_id) AS Total_Customers,
+        SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END)
+            AS Churned_Customers
+    FROM subscriptions
+)
+
+SELECT
+    ROUND(
+        100.0 * Churned_Customers /
+        NULLIF(Total_Customers, 0),
+        1
+    ) AS Rate_Of_Churn
+FROM Churn_Rate;
+
+
+
+-- ^^^^^^^^^^^^^^^^^^^^
+-- Churn_Rate_Per_Plan 
+-- ^^^^^^^^^^^^^^^^^^^^
+
+WITH Churn_Rate_Per_Plan AS
+(
+    SELECT
+        plan,
+        COUNT(customer_id) AS Customers_by_Plan,
+        SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END)
+            AS Churned_Customers
+    FROM subscriptions
+    GROUP BY plan
+)
+
+SELECT
+    plan,
+    Customers_by_Plan,
+    Churned_Customers,
+    ROUND(
+        100.0 * Churned_Customers /
+        NULLIF(Customers_by_Plan, 0),
+        1
+    ) AS Churn_Rate
+FROM Churn_Rate_Per_Plan;
+
+
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-- Churn_Rate_Per_Billing_Cycle
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+WITH Churn_Per_Billing_Cycle AS
+(
+    SELECT
+        billing_cycle,
+        COUNT(customer_id) AS Total_Customers_Per_Billing_Cycle,
+        SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END)
+            AS Churned_Customers
+    FROM subscriptions
+    GROUP BY billing_cycle
+)
+
+SELECT
+    billing_cycle,
+    Total_Customers_Per_Billing_Cycle,
+    Churned_Customers,
+    ROUND(
+        100.0 * Churned_Customers /
+        NULLIF(Total_Customers_Per_Billing_Cycle, 0),
+        2
+    ) AS churn_rate_per_billing_cycle 
+FROM Churn_Per_Billing_Cycle;
+
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+-- Churn_Rate_by_Acquisition_Channel 
+-- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+
+WITH Churn_by_Acquisition_Channel AS
+(
+    SELECT
+        acquisition_channel,
+        COUNT(customer_id) AS Total_Customers_per_Acquisition_Channel,
+        SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END) AS Churned_Customers
+    FROM subscriptions
+    GROUP BY acquisition_channel
+)
+
+SELECT
+    acquisition_channel,
+    Total_Customers_per_Acquisition_Channel,
+    Churned_Customers,
+    ROUND(
+        100.0 * Churned_Customers /
+        NULLIF(Total_Customers_per_Acquisition_Channel, 0),
+        2
+    ) AS Churn_Rate_per_Acquisition_Channel
+FROM Churn_by_Acquisition_Channel
+ORDER BY Churn_Rate_per_Acquisition_Channel DESC;
+
+
+-- ^^^^^^^^^^^^^^^^^^^^^^
+-- Churn_by_Company_Size
+-- ^^^^^^^^^^^^^^^^^^^^^^
+
+
+WITH Churn_by_Company_Size AS
+(
+    SELECT
+        company_size,
+        COUNT(customer_id) AS Total_Customers_per_Company_Size,
+        SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END) AS Churned_Customers
+    FROM subscriptions
+    GROUP BY company_size
+)
+SELECT
+    company_size,
+    total_customers_per_company_size,
+    Churned_customers,
+    ROUND(
+        100.0 * Churned_Customers /
+        NULLIF(Total_Customers_per_Company_Size, 0),
+        2
+    ) AS Churn_Rate_per_Company_Size
+FROM Churn_by_Company_Size
+ORDER BY Churn_Rate_per_Company_Size DESC;
+
+SELECT
+    acquisition_channel,
+    COUNT(customer_id) AS Total_Customers,
+    SUM(CASE WHEN churned = 'Yes' THEN 1 ELSE 0 END) AS Churned_Customers
+FROM subscriptions
+GROUP BY acquisition_channel
+ORDER BY Churned_Customers DESC;
+
+
+
+-- ^^^^^^^^^^^^^^^
+-- Company_Insight
+-- ^^^^^^^^^^^^^^^
+
+WITH CLV_per_Plan AS
+(
+    SELECT
+        plan,
+        ROUND(AVG(monthly_revenue), 2) AS Avg_Mrr,
+        AVG(TIMESTAMPDIFF(MONTH, signup_date, churn_date)) AS Avg_lifespan,
+        ROUND(
+            AVG(monthly_revenue) *
+            AVG(TIMESTAMPDIFF(MONTH, signup_date, churn_date)),
+            2
+        ) AS CLV
+    FROM subscriptions
+    GROUP BY plan
+),
+AVG_CAC AS
+(
+    SELECT
+        ROUND(AVG(customer_acquisition_cost), 2) AS avg_CAC
+    FROM monthly_revenue
+)
+
+SELECT
+    c.plan,
+    c.Avg_Mrr,
+    ROUND(c.Avg_lifespan, 2) AS Avg_lifespan,
+    c.CLV,
+    a.avg_CAC,
+    ROUND(c.CLV / NULLIF(a.avg_CAC, 0), 2) AS CLV_CAC_Ratio
+FROM CLV_per_plan AS c
+CROSS JOIN AVG_CAC AS a
+ORDER BY CLV_CAC_Ratio DESC;
+
+
+
+-- ^^^^^^^^^^^^^^^^^^^^^^^
+-- Top 3 Reasons For Churn
+-- ^^^^^^^^^^^^^^^^^^^^^^^
+
+Select churn_reason
+From subscriptions
+Group by churn_reason 
+ Having churn_reason Is not null
+ Order by Count(customer_id) DESC
+ Limit 3 ;
